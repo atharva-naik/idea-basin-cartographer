@@ -86,14 +86,22 @@ ffmpeg -i screen-recording.mov -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +
 
 ## BYOK LLM judge
 
-Open **Advanced → LLM judge**, paste any OpenAI-compatible key + endpoint
-(OpenAI, OpenRouter, Groq, Together, vLLM…). The key lives in the tab's **memory only** —
-never in the HTML, never in `localStorage`, cleared on reload. Without a key the local
+Open **Advanced → LLM judge** and paste a key:
+
+- **Anthropic** — paste an `sk-ant-…` key and the endpoint/model switch automatically to the
+  native Claude Messages API (`https://api.anthropic.com/v1/messages`, default `claude-opus-5-5`;
+  type `claude-haiku-5-5` in the model box for a cheaper run). Calls go straight from the
+  browser to Anthropic.
+- **OpenAI or any OpenAI-compatible endpoint** (OpenRouter, Groq, Together, vLLM…) — paste the
+  key, and set the endpoint + model if it isn't OpenAI.
+
+The key lives in the tab's **memory only** — never in the HTML, never in `localStorage`,
+cleared on reload, and only ever sent to the endpoint you configured. Without a key the local
 NLP extractor runs (free, offline, same schema).
 
 **Titles.** Proposal headlines are drafted locally as “Mechanism: Application”. With a
 key loaded, the app automatically generates **NeurIPS-level paper titles** for every
-idea (GPT-5.6 Luna, ≈$0.001 total) — or click **✦ Generate paper titles with LLM**.
+idea (≈$0.001 total on GPT-5.6 Luna) — or click **✦ Generate paper titles with LLM**.
 Titles are cached, so parameter tweaks don't re-spend credits.
 
 **Refine.** "✦ Refine with LLM" on any proposal uses the same key to rewrite the draft

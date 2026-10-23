@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <meta name="description" content="Scrape arXiv, extract functional specs from papers, embed idea basins with t-STE, and find underexplored research directions.">
 <title>Idea Basin Cartographer — arXiv → functional specs → t-STE</title>
 <style>
@@ -334,15 +335,16 @@ dl.idea-rows dd{margin:0;color:#cbd6ec;line-height:1.5}
       <div class="bar"><i id="bar"></i></div>
       <details id="llmCfg">
         <summary>LLM judge · BYOK configuration</summary>
-        <label class="f" for="llmUrl">endpoint (chat/completions)</label>
+        <label class="f" for="llmUrl">endpoint (chat/completions or Anthropic /v1/messages)</label>
         <input type="text" id="llmUrl" value="https://api.openai.com/v1/chat/completions" spellcheck="false">
         <label class="f" for="llmKey">api key</label>
-        <div class="row"><input type="password" id="llmKey" placeholder="sk-…" autocomplete="off"><button class="btn sm" id="btnClearKey" style="flex:0 0 auto">clear</button></div>
+        <div class="row"><input type="password" id="llmKey" placeholder="sk-… or sk-ant-…" autocomplete="off"><button class="btn sm" id="btnClearKey" style="flex:0 0 auto">clear</button></div>
         <div id="keyState">no key loaded · local NLP armed</div>
         <label class="f" for="llmModel">model</label>
         <input type="text" id="llmModel" value="gpt-5.6-luna" spellcheck="false">
         <div class="hint">Default GPT-5.6 Luna: $0.20 in / $1.20 out per 1M tokens → ≈$0.02 for a 40-paper extraction run. Use gpt-5.6-terra if you want heavier reasoning.</div>
-        <div class="hint">Key lives in this tab's memory only — never stored, never in the HTML, cleared on reload. Works with OpenAI, OpenRouter, Groq, Together, vLLM… Any OpenAI-compatible endpoint.</div>
+        <div class="hint">Anthropic: paste an <code>sk-ant-…</code> key and the endpoint + model switch to the Claude Messages API (default Claude Opus 5.5; type <code>claude-haiku-5-5</code> for a cheaper run).</div>
+        <div class="hint">Key lives in this tab's memory only — never stored, never in the HTML, cleared on reload. Works with Anthropic natively, plus OpenAI, OpenRouter, Groq, Together, vLLM… any OpenAI-compatible endpoint.</div>
       </details>
     </section>
 
@@ -1224,7 +1226,8 @@ function paperDoc(p,spec){
     spec.mechanism,spec.objective].join(" ");
 }
 function setPapers(list,mode){
-  S.papers=list.map((p,i)=>({id:p.id||null,t:normSpaces(p.t)||"untitled",a:p.a||null,d:p.d||"",c:p.c||"",s:p.s||"",i}));
+  // ids are interpolated raw into hrefs; proxies/imports are untrusted → allow only arXiv-shaped ids
+  S.papers=list.map((p,i)=>({id:/^[\w.\/-]{1,40}$/.test(p.id||"")?p.id:null,t:normSpaces(p.t)||"untitled",a:p.a||null,d:p.d||"",c:p.c||"",s:p.s||"",i}));
   S.specs=[];S.embed=null;S.basins=null;S.pts=null;S.lsa=null;S.sim=null;S.triplets=[];
   S.proposals=null;S.titleCache=new Map();S.titleBusy=false;
   S.ui.selected=null;S.ui.highlight=null;S.mode=mode;closeDrawer(true);
@@ -1470,17 +1473,43 @@ MEASURED BY <metric>
 - next_step = the single most concrete unfinished experiment the authors themselves name (a future-work sentence). If none, "not stated".
 - Use "not reported" when the abstract lacks the field. generality = how domain-portable the insight is (0-1).
 Return ONLY the JSON object, no prose, no markdown.`;
-async function llmJudge(p,cfg){
-  const body={model:cfg.model,temperature:0,messages:[
-    {role:"system",content:LLM_SYSTEM},
-    {role:"user",content:JSON.stringify({title:p.t,abstract:p.s})}]};
-  const res=await fetch(cfg.url,{method:"POST",
-    headers:{"Content-Type":"application/json",Authorization:"Bearer "+cfg.key},body:JSON.stringify(body)});
-  if(!res.ok)throw new Error("HTTP "+res.status+" "+(await res.text()).slice(0,140));
+/* ---------- BYOK provider routing ----------
+   Anthropic keys/endpoints → native Messages API; everything else → OpenAI-compatible chat/completions. */
+const OPENAI_URL="https://api.openai.com/v1/chat/completions",OPENAI_MODEL="gpt-5.6-luna";
+const ANTHROPIC_URL="https://api.anthropic.com/v1/messages",ANTHROPIC_MODEL="claude-opus-5-5";
+const isAnthropic=(url,key)=>/^sk-ant-/.test(key)||/(^|\.)anthropic\.com\//.test(url.replace(/^https?:\/\//,""));
+function llmCfg(){
+  const key=$("#llmKey").value.trim(),url=$("#llmUrl").value.trim(),model=$("#llmModel").value.trim();
+  const anth=isAnthropic(url,key);
+  return {key,anth,url:url||(anth?ANTHROPIC_URL:OPENAI_URL),model:model||(anth?ANTHROPIC_MODEL:OPENAI_MODEL)};
+}
+async function llmChat(cfg,system,user,temperature,errLen){
+  let res;
+  if(cfg.anth){
+    // sampling params are rejected on anthropic-version 2026-10-21; server-side fallback retries classifier refusals
+    const body={model:cfg.model,max_tokens:16000,system,messages:[{role:"user",content:user}]};
+    const headers={"Content-Type":"application/json","x-api-key":cfg.key,"anthropic-version":"2026-10-21",
+      "anthropic-dangerous-direct-browser-access":"true"};
+    if(/^claude-(opus-5(-5)?|fable-5-1|sonnet-5-5)$/.test(cfg.model)){body.fallbacks="default";headers["anthropic-beta"]="server-side-fallback-2026-07-01";}
+    res=await fetch(cfg.url,{method:"POST",headers,body:JSON.stringify(body)});
+  }else{
+    res=await fetch(cfg.url,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+cfg.key},
+      body:JSON.stringify({model:cfg.model,temperature,messages:[{role:"system",content:system},{role:"user",content:user}]})});
+  }
+  if(!res.ok)throw new Error("HTTP "+res.status+" "+(await res.text()).slice(0,errLen||140));
   const j=await res.json();
+  if(cfg.anth){
+    if(j.stop_reason==="refusal")throw new Error("model declined"+(j.stop_details&&j.stop_details.category?` (${j.stop_details.category})`:""));
+    const txt=(j.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+    if(!txt)throw new Error("empty model response");
+    return txt;
+  }
   const content=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
   if(!content)throw new Error("empty model response");
-  return parseJsonLoose(content);
+  return content;
+}
+async function llmJudge(p,cfg){
+  return parseJsonLoose(await llmChat(cfg,LLM_SYSTEM,JSON.stringify({title:p.t,abstract:p.s}),0));
 }
 function runExtractLocal(){
   S.corpusTf=buildTfidf(S.papers.map(p=>p.t+" "+p.s));
@@ -1488,8 +1517,7 @@ function runExtractLocal(){
   setBar(1);log(`local NLP extracted ${S.specs.length} functional specs ✓`,"ok");
 }
 async function runExtractLLM(){
-  const cfg={url:$("#llmUrl").value.trim()||"https://api.openai.com/v1/chat/completions",
-             key:$("#llmKey").value.trim(),model:$("#llmModel").value.trim()||"gpt-5.6-luna"};
+  const cfg=llmCfg();
   if(!cfg.key){log("no API key → local NLP for all papers","warn");runExtractLocal();return;}
   S.corpusTf=buildTfidf(S.papers.map(p=>p.t+" "+p.s));
   const n=S.papers.length,specs=new Array(n);let done=0,next=0;S.cancel=false;
@@ -2229,23 +2257,14 @@ Return strict JSON with EXACTLY these keys:
 Rules: keep the named papers; generic filler and "further research is needed" are banned; every claim must be traceable to the provided specs; return ONLY the JSON object.`;
 async function llmRefineProposal(pr){
   if(!pr)return;
-  const key=$("#llmKey").value.trim();
-  if(!key){log("Refine needs a BYOK key — add one in Advanced → LLM judge","warn");return;}
-  const url=$("#llmUrl").value.trim()||"https://api.openai.com/v1/chat/completions";
-  const model=$("#llmModel").value.trim()||"gpt-5.6-luna";
+  const cfg=llmCfg();
+  if(!cfg.key){log("Refine needs a BYOK key — add one in Advanced → LLM judge","warn");return;}
   setStage("refining proposal…");
   try{
-    const body={model,temperature:0.4,messages:[
-      {role:"system",content:PROPOSER_SYSTEM},
-      {role:"user",content:JSON.stringify({
+    const raw=await llmChat(cfg,PROPOSER_SYSTEM,JSON.stringify({
         gap:pr.evidence,
         draft:{title:pr.title,recipe:pr.recipe,hypothesis:pr.hypothesis,evaluation:pr.evaluation,risk:pr.risk},
-        anchors:pr.papers.map(i=>({paper:S.papers[i].t,arxiv_id:S.papers[i].id,functional_spec:S.specs[i]}))})}]};
-    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+key},body:JSON.stringify(body)});
-    if(!res.ok)throw new Error("HTTP "+res.status+" "+(await res.text()).slice(0,120));
-    const j=await res.json();
-    const raw=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
-    if(!raw)throw new Error("empty response");
+        anchors:pr.papers.map(i=>({paper:S.papers[i].t,arxiv_id:S.papers[i].id,functional_spec:S.specs[i]}))}),0.4,120);
     const parsed=parseJsonLoose(raw);
     for(const k of ["title","project_title","evidence","recipe","hypothesis","evaluation","risk"])
       if(typeof parsed[k]==="string"&&normSpaces(parsed[k]))pr[k]=normSpaces(parsed[k]);
@@ -2274,19 +2293,10 @@ Hard rules:
 - A memorable system name plus colon subtitle scores higher than a flat sentence.
 Return ONLY {"title":"..."}.`;
 async function llmProjectTitle(pr){
-  const key=$("#llmKey").value.trim();
-  if(!key)throw new Error("no BYOK key");
-  const url=$("#llmUrl").value.trim()||"https://api.openai.com/v1/chat/completions";
-  const model=$("#llmModel").value.trim()||"gpt-5.6-luna";
-  const body={model,temperature:0.9,messages:[
-    {role:"system",content:TITLE_SYSTEM},
-    {role:"user",content:JSON.stringify({gap:pr.evidence,draft_title:pr.title,
-      anchors:pr.papers.map(i=>({paper:S.papers[i].t,functional_spec:S.specs[i]}))})}]};
-  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+key},body:JSON.stringify(body)});
-  if(!res.ok)throw new Error("HTTP "+res.status+" "+(await res.text()).slice(0,100));
-  const j=await res.json();
-  const raw=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
-  if(!raw)throw new Error("empty response");
+  const cfg=llmCfg();
+  if(!cfg.key)throw new Error("no BYOK key");
+  const raw=await llmChat(cfg,TITLE_SYSTEM,JSON.stringify({gap:pr.evidence,draft_title:pr.title,
+      anchors:pr.papers.map(i=>({paper:S.papers[i].t,functional_spec:S.specs[i]}))}),0.9,100);
   const t=normSpaces((parseJsonLoose(raw).title)||"");
   if(!t)throw new Error("no title in response");
   pr.project_title=t;pr.titled=true;return t;
@@ -2313,7 +2323,7 @@ async function generateAllTitles(force){
   S.titleBusy=false;
   if(btn)btn.disabled=false;
   setStage("settled");renderAll();
-  log(`titles: ${ok}/${todo.length} generated with ${$("#llmModel").value.trim()||"gpt-5.6-luna"}`,"ok");
+  log(`titles: ${ok}/${todo.length} generated with ${llmCfg().model}`,"ok");
 }
 function renderBasinsTab(){
   const el=$("#pane-basins");
@@ -2661,11 +2671,20 @@ function init(){
   const refreshKeyState=()=>{
     const k=keyInput.value.trim();
     const st=$("#keyState");
-    if(k){st.textContent="key loaded (…"+k.slice(-4)+") · LLM judge armed";st.classList.add("on");}
+    if(k){st.textContent="key loaded (…"+k.slice(-4)+") · "+(llmCfg().anth?"Anthropic":"OpenAI-compatible")+" · LLM judge armed";st.classList.add("on");}
     else{st.textContent="no key loaded · local NLP armed";st.classList.remove("on");}
   };
+  // pasting a key from the other provider swaps endpoint + model, but only while they're still at a provider default
+  const syncProvider=()=>{
+    const k=keyInput.value.trim(),u=$("#llmUrl"),m=$("#llmModel");
+    if(!k)return;
+    const anth=/^sk-ant-/.test(k),atDefault=[OPENAI_URL,ANTHROPIC_URL,""].includes(u.value.trim());
+    if(!atDefault)return;
+    u.value=anth?ANTHROPIC_URL:OPENAI_URL;
+    if([OPENAI_MODEL,ANTHROPIC_MODEL,""].includes(m.value.trim()))m.value=anth?ANTHROPIC_MODEL:OPENAI_MODEL;
+  };
   keyInput.addEventListener("input",()=>{
-    refreshKeyState();
+    syncProvider();refreshKeyState();
     if(keyInput.value.trim().length>20&&S.proposals&&S.proposals.some(p=>!p.project_title))
       debounce("titles",()=>generateAllTitles(),600);   // type a key → titles appear
   });
