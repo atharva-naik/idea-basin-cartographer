@@ -58,7 +58,7 @@ Live at `https://atharva-naik.github.io/idea-basin-cartographer/`.
 
 | URL | Effect |
 |---|---|
-| `?tour=1` | **Choreographed one-take demo**: types the query, scrapes arXiv, plays the cinematic embedding, scrolls to the concrete ideas. Built for screen recording. |
+| `?tour=1` | **Choreographed one-take demo** (or press **Shift+T** on the page — keeps a pasted key): types the query, scrapes arXiv, plays the cinematic embedding, scrolls to the concrete ideas. Built for screen recording. |
 | `?tour=1&speed=0.7` | Slows the cinematic timeline (default `1.0`). Range `0.2`–`3`. |
 | `?fullscreen=1` | Fullscreen mode: hides all chrome, plot fills the viewport. (`?cinema=1` still works as an alias.) |
 | `?still=1` | Skip the cinematic, jump straight to the final map. |
@@ -71,7 +71,7 @@ Live at `https://atharva-naik.github.io/idea-basin-cartographer/`.
 2. **Advanced → LLM judge → paste your key** first (memory-only). This is what upgrades
    the headlines to NeurIPS-level titles mid-take. Skip it for a keyless template take.
 3. Start screen recording (Cmd+Shift+5 / OBS / ScreenStudio).
-4. Click **🎬 Tour (record me)** — the page self-directs the whole take: **query typed →
+4. Click anywhere outside a text field and press **Shift+T** — the page self-directs the whole take: **query typed →
    arXiv scraped → ideas settle into basins → contour topology → gaps flagged → real
    paper titles generated → scroll to the concrete proposals**.
 5. Stop recording after the first proposal card glows (~25–35 s).

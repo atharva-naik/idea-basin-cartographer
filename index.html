@@ -395,7 +395,6 @@ dl.idea-rows dd{margin:0;color:#cbd6ec;line-height:1.5}
     <div class="plotcard">
       <div class="toolbar">
         <button class="btn sm primary" id="btnReplay">▶ Replay demo</button>
-        <button class="btn sm" id="btnTour">🎬 Tour (record me)</button>
         <button class="btn sm" id="btnCinema">⛶ Fullscreen</button>
         <span class="tg on" id="tContour" role="switch" aria-checked="true">contours</span>
         <span class="tg on" id="tHull" role="switch" aria-checked="true">hulls</span>
@@ -2663,8 +2662,12 @@ function init(){
   $("#btnRecompute").addEventListener("click",()=>{recompute();renderAll();});
   $("#btnFull").addEventListener("click",async()=>{if(S.mode==="live")await fetchArxiv();else{await pipeline();renderAll();}});
   $("#btnReplay").addEventListener("click",()=>{if(S.dom)startDemo();else log("wait for first computation","warn");});
-  $("#btnTour").addEventListener("click",()=>{interacted();runTour();});
   $("#btnCinema").addEventListener("click",()=>toggleCinema());
+  // hidden recording trigger (no visible button): Shift+T runs the tour without reloading, so a pasted key survives
+  document.addEventListener("keydown",e=>{
+    if(e.key==="T"&&e.shiftKey&&!e.metaKey&&!e.ctrlKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){
+      e.preventDefault();interacted();runTour();}
+  });
 
   // BYOK key state
   const keyInput=$("#llmKey");
