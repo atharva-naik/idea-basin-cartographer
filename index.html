@@ -322,7 +322,7 @@ dl.idea-rows dd{margin:0;color:#cbd6ec;line-height:1.5}
 
     <section class="card">
       <h3 class="s2"><span class="stepno">2</span>EXTRACT · functional specs</h3>
-      <div class="desc">Turn each abstract into a harness spec: GIVEN / WHEN / THEN / MEASURED BY.</div>
+      <div class="desc">Turn each abstract into a functional spec: GIVEN / WHEN / THEN / MEASURED BY.</div>
       <label class="f" for="extractor">extractor</label>
       <select id="extractor">
         <option value="local">Local NLP (offline, free)</option>
@@ -1186,7 +1186,7 @@ const W=960,H=620,PAD=64;
 
 /* cinematic timeline (seconds) */
 const STAGES=[
- {key:"ingest",t:0.0, tag:"01 · INGEST",          txt:"Scraping arXiv for harness papers"},
+ {key:"ingest",t:0.0, tag:"01 · INGEST",          txt:"Scraping arXiv for your topic"},
  {key:"spec",  t:2.0, tag:"02 · FUNCTIONAL SPEC", txt:"GIVEN / WHEN / THEN / MEASURED BY"},
  {key:"trip",  t:4.6, tag:"03 · TRIPLETS",        txt:"“this idea is closer to that one”"},
  {key:"ste",   t:6.4, tag:"04 · t-STE",           txt:"Ideas settle into basins"},
@@ -2230,7 +2230,7 @@ function renderProposalSection(){
     <div class="desc">Each card states the measured gap, exactly which components of named papers to combine, a falsifiable hypothesis, an evaluation reusing benchmarks already in this corpus, and the most likely failure. Headlines start as a natural template (“Mechanism: Application”); with a BYOK key they are automatically rewritten into NeurIPS-level paper titles and the whole proposal is sharpened.</div>
     <div class="row" style="justify-content:flex-start;margin:2px 0 10px">
       <button class="btn sm" id="btnTitles" style="flex:0 0 auto">✦ Generate paper titles with LLM</button>
-      <span class="hint" style="margin:0;flex:1;min-width:180px">One real academic title per idea (GPT-5.6 Luna, ≈$0.001 total).</span>
+      <span class="hint" style="margin:0;flex:1;min-width:180px">One real academic title per idea, using your BYOK key (Claude or OpenAI-compatible).</span>
     </div>
     <div class="pgrid2">`+ps.map(p=>`
       <div class="idea" data-idea="${esc(p.id)}">
